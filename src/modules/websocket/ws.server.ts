@@ -56,6 +56,7 @@ export class TradingWebSocketServer {
       });
 
       this.clients.add(client);
+      client.subscriptions.add('market:all');
 
       // Send initial snapshot of all tickers
       const tickers = exchangeService.getTickers();
@@ -77,10 +78,9 @@ export class TradingWebSocketServer {
       }
     }, 30000);
 
-    // Forward exchange ticker updates to WebSocket subscribers
+    // Forward exchange ticker updates to all WebSocket clients with zero latency
     exchangeService.subscribeTicks((ticker: MarketTicker) => {
-      this.broadcastToChannel(`market:${ticker.symbol}`, 'market.price', ticker);
-      this.broadcastToChannel('market:all', 'market.price', ticker);
+      this.broadcast('market.price', ticker);
     });
 
     // Forward candle updates to WebSocket subscribers
@@ -148,6 +148,21 @@ export class TradingWebSocketServer {
 
     for (const client of this.clients) {
       if (client.readyState === WebSocket.OPEN && client.subscriptions.has(channel)) {
+        client.send(serialized);
+      }
+    }
+  }
+
+  public broadcast<T>(event: WebSocketEvent, data: T) {
+    const message: WebSocketMessage<T> = {
+      event,
+      data,
+      timestamp: Date.now(),
+    };
+    const serialized = JSON.stringify(message);
+
+    for (const client of this.clients) {
+      if (client.readyState === WebSocket.OPEN) {
         client.send(serialized);
       }
     }

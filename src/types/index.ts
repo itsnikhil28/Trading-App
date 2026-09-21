@@ -109,6 +109,7 @@ export interface MarketTicker {
   volume24h: number;
   change24h: number; // Percentage change
   lastUpdated: number;
+  maxLeverage?: number;
 }
 
 export interface OrderbookLevel {

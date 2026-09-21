@@ -23,7 +23,41 @@ export class HyperliquidExchangeService implements IExchangeService {
   private wsConnected = false;
 
   constructor() {
+    this.seedDefaultMarkets();
     this.initHyperliquid();
+  }
+
+  private seedDefaultMarkets() {
+    const basePairs = [
+      { coin: 'BTC', price: 85980, vol: 4400000000, change: 5.8, maxLev: 40 },
+      { coin: 'ETH', price: 2745, vol: 2100000000, change: 4.4, maxLev: 25 },
+      { coin: 'SOL', price: 117.2, vol: 520000000, change: 6.5, maxLev: 20 },
+      { coin: 'BNB', price: 794.5, vol: 227000000, change: 4.0, maxLev: 20 },
+      { coin: 'XRP', price: 1.48, vol: 382000000, change: 5.8, maxLev: 20 },
+      { coin: 'DOGE', price: 0.097, vol: 193000000, change: 11.1, maxLev: 10 },
+      { coin: 'SUI', price: 2.12, vol: 160000000, change: 8.2, maxLev: 20 },
+      { coin: 'PEPE', price: 0.0000078, vol: 140000000, change: 12.4, maxLev: 10 },
+      { coin: 'AVAX', price: 10.96, vol: 110000000, change: -1.7, maxLev: 20 },
+      { coin: 'LINK', price: 14.2, vol: 95000000, change: 3.1, maxLev: 20 },
+    ];
+    const now = Date.now();
+    for (const p of basePairs) {
+      const symbol = `${p.coin}USDT`;
+      this.coinToSymbol.set(p.coin, symbol);
+      this.symbolToCoin.set(symbol, p.coin);
+      this.tickers.set(symbol, {
+        symbol,
+        baseAsset: p.coin,
+        quoteAsset: 'USDT',
+        price: p.price,
+        high24h: p.price * 1.05,
+        low24h: p.price * 0.95,
+        volume24h: p.vol,
+        change24h: p.change,
+        lastUpdated: now,
+        maxLeverage: p.maxLev,
+      });
+    }
   }
 
   private async initHyperliquid() {
@@ -49,21 +83,32 @@ export class HyperliquidExchangeService implements IExchangeService {
       if (!meta || !meta.universe || !Array.isArray(ctxs)) return;
 
       const now = Date.now();
+      const candidates: Array<{ u: any; ctx: any; volume24h: number }> = [];
+
       for (let i = 0; i < meta.universe.length; i++) {
         const u = meta.universe[i];
         const ctx = ctxs[i];
         if (!u || u.isDelisted || !ctx) continue;
+        const markPx = parseFloat(ctx.markPx || ctx.midPx || '0');
+        const volume24h = parseFloat(ctx.dayNtlVlm || '0');
+        if (markPx <= 0) continue;
+        candidates.push({ u, ctx, volume24h });
+      }
 
+      // Sort by volume descending and take top 110 perpetual markets
+      candidates.sort((a, b) => b.volume24h - a.volume24h);
+      const topSelected = candidates.slice(0, 110);
+
+      for (const { u, ctx, volume24h } of topSelected) {
         const coin = u.name;
         const symbol = `${coin}USDT`;
         this.coinToSymbol.set(coin, symbol);
         this.symbolToCoin.set(symbol, coin);
-        this.symbolToCoin.set(coin, coin); // Support both BTC and BTCUSDT
+        this.symbolToCoin.set(coin, coin);
 
         const markPx = parseFloat(ctx.markPx || ctx.midPx || '0');
         const prevDayPx = parseFloat(ctx.prevDayPx || '0');
         const change24h = prevDayPx > 0 ? ((markPx - prevDayPx) / prevDayPx) * 100 : 0;
-        const volume24h = parseFloat(ctx.dayNtlVlm || '0');
 
         const existing = this.tickers.get(symbol);
         const high24h = existing ? Math.max(existing.high24h, markPx) : markPx * 1.02;
@@ -79,6 +124,7 @@ export class HyperliquidExchangeService implements IExchangeService {
           volume24h: Number(volume24h.toFixed(2)),
           change24h: Number(change24h.toFixed(2)),
           lastUpdated: now,
+          maxLeverage: u.maxLeverage || 20,
         };
 
         this.tickers.set(symbol, ticker);
@@ -138,32 +184,19 @@ export class HyperliquidExchangeService implements IExchangeService {
   private handleMidsUpdate(mids: Record<string, string>) {
     const now = Date.now();
     for (const [coin, priceStr] of Object.entries(mids)) {
-      const symbol = this.coinToSymbol.get(coin) || `${coin}USDT`;
+      const symbol = this.coinToSymbol.get(coin);
+      if (!symbol) continue; // Only process approved top 110 coins
+
+      const ticker = this.tickers.get(symbol);
+      if (!ticker) continue;
+
       const price = parseFloat(priceStr);
       if (isNaN(price) || price <= 0) continue;
 
-      let ticker = this.tickers.get(symbol);
-      if (!ticker) {
-        ticker = {
-          symbol,
-          baseAsset: coin,
-          quoteAsset: 'USDT',
-          price,
-          high24h: price,
-          low24h: price,
-          volume24h: 1000000,
-          change24h: 0,
-          lastUpdated: now,
-        };
-        this.tickers.set(symbol, ticker);
-        this.coinToSymbol.set(coin, symbol);
-        this.symbolToCoin.set(symbol, coin);
-      } else {
-        ticker.price = price;
-        if (price > ticker.high24h) ticker.high24h = price;
-        if (price < ticker.low24h) ticker.low24h = price;
-        ticker.lastUpdated = now;
-      }
+      ticker.price = price;
+      if (price > ticker.high24h) ticker.high24h = price;
+      if (price < ticker.low24h) ticker.low24h = price;
+      ticker.lastUpdated = now;
 
       this.notifyTick(ticker);
     }
