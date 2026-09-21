@@ -15,22 +15,26 @@ export class SimulationExchangeService implements IExchangeService {
   private tickCallbacks: Set<(ticker: MarketTicker) => void> = new Set();
   private candleCallbacks: Set<(symbol: string, candle: Candle) => void> = new Set();
   private intervalTimer: NodeJS.Timeout | null = null;
+  private syncTimer: NodeJS.Timeout | null = null;
 
   constructor() {
     this.initializeMarkets();
     this.startPriceSimulation();
+    this.syncRealMarketPrices();
+    // Sync with live public crypto market prices every 3 seconds
+    this.syncTimer = setInterval(() => this.syncRealMarketPrices(), 3000);
   }
 
   private initializeMarkets() {
     const basePairs = [
-      { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', price: 91450.0, volume24h: 1845203000, change24h: 2.85 },
-      { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', price: 3420.5, volume24h: 924300000, change24h: -1.20 },
-      { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', price: 198.4, volume24h: 712000000, change24h: 5.64 },
-      { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', price: 635.8, volume24h: 310500000, change24h: 0.94 },
-      { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', price: 2.45, volume24h: 620000000, change24h: 8.30 },
-      { symbol: 'DOGEUSDT', baseAsset: 'DOGE', quoteAsset: 'USDT', price: 0.285, volume24h: 410000000, change24h: -3.10 },
-      { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', price: 0.88, volume24h: 195000000, change24h: 1.45 },
-      { symbol: 'AVAXUSDT', baseAsset: 'AVAX', quoteAsset: 'USDT', price: 36.7, volume24h: 240000000, change24h: 3.12 },
+      { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT', price: 85780.0, volume24h: 2435203000, change24h: 5.54 },
+      { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT', price: 2744.0, volume24h: 1400300000, change24h: 4.04 },
+      { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT', price: 117.2, volume24h: 520000000, change24h: 6.57 },
+      { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT', price: 794.5, volume24h: 227000000, change24h: 4.08 },
+      { symbol: 'XRPUSDT', baseAsset: 'XRP', quoteAsset: 'USDT', price: 1.489, volume24h: 382000000, change24h: 5.88 },
+      { symbol: 'DOGEUSDT', baseAsset: 'DOGE', quoteAsset: 'USDT', price: 0.097, volume24h: 193000000, change24h: 11.18 },
+      { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT', price: 0.242, volume24h: 65000000, change24h: 5.30 },
+      { symbol: 'AVAXUSDT', baseAsset: 'AVAX', quoteAsset: 'USDT', price: 10.96, volume24h: 110000000, change24h: -1.70 },
     ];
 
     const now = Date.now();
@@ -43,8 +47,8 @@ export class SimulationExchangeService implements IExchangeService {
         baseAsset: pair.baseAsset,
         quoteAsset: pair.quoteAsset,
         price: pair.price,
-        high24h,
-        low24h,
+        high24h: Number(high24h.toFixed(pair.price < 1 ? 4 : 2)),
+        low24h: Number(low24h.toFixed(pair.price < 1 ? 4 : 2)),
         volume24h: pair.volume24h,
         change24h: pair.change24h,
         lastUpdated: now,
@@ -52,13 +56,13 @@ export class SimulationExchangeService implements IExchangeService {
 
       // Generate 100 initial candles for 1m
       const candles: Candle[] = [];
-      let currentClose = pair.price * 0.98;
+      let currentClose = pair.price * 0.985;
       const intervalMs = 60 * 1000;
       const startTime = now - 100 * intervalMs;
 
       for (let i = 0; i < 100; i++) {
         const time = startTime + i * intervalMs;
-        const volatility = pair.price * 0.003;
+        const volatility = pair.price * 0.0025;
         const delta = (Math.random() - 0.49) * volatility;
         const open = currentClose;
         const close = open + delta;
@@ -68,10 +72,10 @@ export class SimulationExchangeService implements IExchangeService {
 
         candles.push({
           time,
-          open: Number(open.toFixed(2)),
-          high: Number(high.toFixed(2)),
-          low: Number(low.toFixed(2)),
-          close: Number(close.toFixed(2)),
+          open: Number(open.toFixed(pair.price < 1 ? 4 : 2)),
+          high: Number(high.toFixed(pair.price < 1 ? 4 : 2)),
+          low: Number(low.toFixed(pair.price < 1 ? 4 : 2)),
+          close: Number(close.toFixed(pair.price < 1 ? 4 : 2)),
           volume: Number(volume.toFixed(2)),
         });
         currentClose = close;
@@ -80,13 +84,50 @@ export class SimulationExchangeService implements IExchangeService {
     }
   }
 
+  private async syncRealMarketPrices() {
+    try {
+      const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+      if (!response.ok) return;
+
+      const data = (await response.json()) as any[];
+      const symbolMap = new Map<string, any>();
+      for (const item of data) {
+        symbolMap.set(item.symbol, item);
+      }
+
+      for (const [symbol, ticker] of this.tickers.entries()) {
+        const live = symbolMap.get(symbol);
+        if (live) {
+          const livePrice = parseFloat(live.lastPrice);
+          const liveHigh = parseFloat(live.highPrice);
+          const liveLow = parseFloat(live.lowPrice);
+          const liveChange = parseFloat(live.priceChangePercent);
+          const liveVol = parseFloat(live.quoteVolume) || ticker.volume24h;
+
+          if (!isNaN(livePrice) && livePrice > 0) {
+            ticker.price = livePrice;
+            ticker.high24h = liveHigh;
+            ticker.low24h = liveLow;
+            ticker.change24h = liveChange;
+            ticker.volume24h = liveVol;
+            ticker.lastUpdated = Date.now();
+            this.notifyTick(ticker);
+          }
+        }
+      }
+      console.log('[Exchange] Successfully synced live market prices (BTC ~$' + this.tickers.get('BTCUSDT')?.price + ')');
+    } catch {
+      // Fallback silently to simulation ticks
+    }
+  }
+
   private startPriceSimulation() {
     this.intervalTimer = setInterval(() => {
       const now = Date.now();
 
       for (const [symbol, ticker] of this.tickers.entries()) {
-        const volatilityRatio = 0.0008; // ~0.08% random walk per tick
-        const priceDelta = (Math.random() - 0.498) * ticker.price * volatilityRatio;
+        const volatilityRatio = 0.0004; // subtle smooth walk between real syncs
+        const priceDelta = (Math.random() - 0.499) * ticker.price * volatilityRatio;
         const newPrice = Math.max(0.0001, Number((ticker.price + priceDelta).toFixed(ticker.price < 1 ? 4 : 2)));
 
         ticker.price = newPrice;
@@ -204,9 +245,8 @@ export class SimulationExchangeService implements IExchangeService {
   }
 
   public destroy() {
-    if (this.intervalTimer) {
-      clearInterval(this.intervalTimer);
-    }
+    if (this.intervalTimer) clearInterval(this.intervalTimer);
+    if (this.syncTimer) clearInterval(this.syncTimer);
   }
 }
 
