@@ -10,11 +10,11 @@ export class MarketsService {
     return exchangeService.getTicker(symbol);
   }
 
-  public getCandles(symbol: string, timeframe: string = '1m', limit: number = 100): Candle[] {
+  public async getCandles(symbol: string, timeframe: string = '1m', limit: number = 100): Promise<Candle[]> {
     return exchangeService.getCandles(symbol, timeframe, limit);
   }
 
-  public getOrderbook(symbol: string, depth: number = 10): Orderbook {
+  public async getOrderbook(symbol: string, depth: number = 10): Promise<Orderbook> {
     return exchangeService.getOrderbook(symbol, depth);
   }
 }

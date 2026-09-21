@@ -25,23 +25,23 @@ export class MarketsController {
     }
   }
 
-  public getCandles(req: Request, res: Response, next: NextFunction): void {
+  public async getCandles(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { symbol } = req.params;
       const timeframe = (req.query.timeframe as string) || '1m';
       const limit = parseInt((req.query.limit as string) || '100', 10);
-      const candles = marketsService.getCandles(symbol, timeframe, limit);
+      const candles = await marketsService.getCandles(symbol, timeframe, limit);
       res.status(200).json({ success: true, data: candles });
     } catch (err) {
       next(err);
     }
   }
 
-  public getOrderbook(req: Request, res: Response, next: NextFunction): void {
+  public async getOrderbook(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { symbol } = req.params;
       const depth = parseInt((req.query.depth as string) || '10', 10);
-      const orderbook = marketsService.getOrderbook(symbol, depth);
+      const orderbook = await marketsService.getOrderbook(symbol, depth);
       res.status(200).json({ success: true, data: orderbook });
     } catch (err) {
       next(err);
