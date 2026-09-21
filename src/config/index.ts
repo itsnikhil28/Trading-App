@@ -17,7 +17,11 @@ export const config = {
   clientOrigin: process.env.CLIENT_ORIGIN || '*',
   exchange: {
     mode: process.env.EXCHANGE_MODE || 'simulation',
-    apiKey: process.env.EXCHANGE_API_KEY || '',
+    apiKey: process.env.EXCHANGE_API_KEY || process.env.PROPR_TEST_KEY || '',
+    accountId: process.env.EXCHANGE_ACCOUNT_ID || process.env.PROPR_ACCOUNT_ID || '',
     apiSecret: process.env.EXCHANGE_API_SECRET || '',
+    proprBetaUrl: process.env.PROPR_BETA_URL || 'https://api.beta.propr.xyz/v1',
+    proprWsUrl: process.env.PROPR_WS_URL || 'wss://api.beta.propr.xyz/ws',
+    hyperliquidUrl: process.env.HYPERLIQUID_API_URL || 'https://api.hyperliquid.xyz/info',
   },
 };
