@@ -4,6 +4,7 @@ dotenv.config();
 export const config = {
   port: parseInt(process.env.PORT || '4000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
+  mongodbUri: process.env.MONGODB_URI || 'mongodb+srv://itsnikhil28_db_user:pmTSy3NfpjflihhL@cluster0.fao3vhd.mongodb.net/trading_terminal?retryWrites=true&w=majority&appName=Cluster0',
   jwt: {
     secret: process.env.JWT_SECRET || 'dev-jwt-super-secret-key-trading-terminal-32chars',
     refreshSecret: process.env.JWT_REFRESH_SECRET || 'dev-jwt-refresh-secret-key-trading-terminal-32chars',

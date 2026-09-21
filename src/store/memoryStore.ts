@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import mongoose from 'mongoose';
 import { User, Session, Portfolio, Order, Position, Trade } from '../types';
+import { UserModel, SessionModel, PortfolioModel, OrderModel, PositionModel, TradeModel } from '../db/models';
 
 class MemoryStore {
   public users: Map<string, User> = new Map();
@@ -12,6 +14,10 @@ class MemoryStore {
 
   constructor() {
     this.seedDemoUser();
+  }
+
+  private isDbConnected(): boolean {
+    return mongoose.connection.readyState === 1;
   }
 
   private seedDemoUser() {
@@ -70,10 +76,17 @@ class MemoryStore {
 
   public createUser(user: User): User {
     this.users.set(user.id, user);
-    // Automatically create portfolio
+
+    if (this.isDbConnected()) {
+      UserModel.findOneAndUpdate({ id: user.id }, user, { upsert: true }).catch((err) => {
+        console.error('[DB] Failed to save user to MongoDB', err);
+      });
+    }
+
+    // Automatically create portfolio if not present
     if (!this.portfolios.has(user.id)) {
       const now = new Date().toISOString();
-      this.portfolios.set(user.id, {
+      const port: Portfolio = {
         id: uuidv4(),
         userId: user.id,
         balance: 10000.0,
@@ -84,7 +97,13 @@ class MemoryStore {
         realizedPnl: 0.0,
         todayPnl: 0.0,
         updatedAt: now,
-      });
+      };
+      this.portfolios.set(user.id, port);
+      if (this.isDbConnected()) {
+        PortfolioModel.findOneAndUpdate({ userId: user.id }, port, { upsert: true }).catch((err) => {
+          console.error('[DB] Failed to save portfolio to MongoDB', err);
+        });
+      }
     }
     return user;
   }
@@ -92,6 +111,11 @@ class MemoryStore {
   // Session methods
   public saveSession(session: Session): void {
     this.sessions.set(session.refreshToken, session);
+    if (this.isDbConnected()) {
+      SessionModel.findOneAndUpdate({ refreshToken: session.refreshToken }, session, { upsert: true }).catch((err) => {
+        console.error('[DB] Failed to save session to MongoDB', err);
+      });
+    }
   }
 
   public getSession(refreshToken: string): Session | undefined {
@@ -99,6 +123,11 @@ class MemoryStore {
   }
 
   public deleteSession(refreshToken: string): boolean {
+    if (this.isDbConnected()) {
+      SessionModel.deleteOne({ refreshToken }).catch((err) => {
+        console.error('[DB] Failed to delete session from MongoDB', err);
+      });
+    }
     return this.sessions.delete(refreshToken);
   }
 
@@ -127,12 +156,23 @@ class MemoryStore {
   public updatePortfolio(portfolio: Portfolio): Portfolio {
     portfolio.updatedAt = new Date().toISOString();
     this.portfolios.set(portfolio.userId, portfolio);
+
+    if (this.isDbConnected()) {
+      PortfolioModel.findOneAndUpdate({ userId: portfolio.userId }, portfolio, { upsert: true }).catch((err) => {
+        console.error('[DB] Failed to update portfolio in MongoDB', err);
+      });
+    }
     return portfolio;
   }
 
   // Orders methods
   public createOrder(order: Order): Order {
     this.orders.set(order.id, order);
+    if (this.isDbConnected()) {
+      OrderModel.findOneAndUpdate({ id: order.id }, order, { upsert: true }).catch((err) => {
+        console.error('[DB] Failed to save order to MongoDB', err);
+      });
+    }
     return order;
   }
 
@@ -149,12 +189,22 @@ class MemoryStore {
   public updateOrder(order: Order): Order {
     order.updatedAt = new Date().toISOString();
     this.orders.set(order.id, order);
+    if (this.isDbConnected()) {
+      OrderModel.findOneAndUpdate({ id: order.id }, order, { upsert: true }).catch((err) => {
+        console.error('[DB] Failed to update order in MongoDB', err);
+      });
+    }
     return order;
   }
 
   // Positions methods
   public createPosition(position: Position): Position {
     this.positions.set(position.id, position);
+    if (this.isDbConnected()) {
+      PositionModel.findOneAndUpdate({ id: position.id }, position, { upsert: true }).catch((err) => {
+        console.error('[DB] Failed to save position to MongoDB', err);
+      });
+    }
     return position;
   }
 
@@ -173,12 +223,22 @@ class MemoryStore {
   public updatePosition(position: Position): Position {
     position.updatedAt = new Date().toISOString();
     this.positions.set(position.id, position);
+    if (this.isDbConnected()) {
+      PositionModel.findOneAndUpdate({ id: position.id }, position, { upsert: true }).catch((err) => {
+        console.error('[DB] Failed to update position in MongoDB', err);
+      });
+    }
     return position;
   }
 
   // Trades methods
   public createTrade(trade: Trade): Trade {
     this.trades.set(trade.id, trade);
+    if (this.isDbConnected()) {
+      TradeModel.findOneAndUpdate({ id: trade.id }, trade, { upsert: true }).catch((err) => {
+        console.error('[DB] Failed to save trade to MongoDB', err);
+      });
+    }
     return trade;
   }
 
