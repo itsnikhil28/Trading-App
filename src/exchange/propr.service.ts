@@ -317,14 +317,33 @@ export class ProprService {
         } else {
           this.cachedPositions.delete(data.positionId);
         }
-        this.recomputeMetrics();
-        wsServer.broadcast('position.updated', data);
+        const updatedPositions = this.recomputeMetrics();
+        const calc = updatedPositions.find((p: any) => p.positionId === data.positionId) || data;
+        const formatted = {
+          id: calc.positionId || calc.id,
+          userId: this.cachedAccount?.userId || 'user-demo-001',
+          symbol: `${calc.asset || calc.base || 'BTC'}USDT`,
+          side: (calc.positionSide || calc.side || 'long').toUpperCase(),
+          entryPrice: parseFloat(calc.entryPrice || '0'),
+          markPrice: parseFloat(calc.markPrice || calc.entryPrice || '0'),
+          quantity: Math.abs(parseFloat(calc.quantity || '0')),
+          leverage: parseInt(calc.leverage || '10', 10),
+          margin: parseFloat(calc.marginUsed || calc.margin || '0'),
+          liquidationPrice: parseFloat(calc.liquidationPrice || '0'),
+          unrealizedPnl: parseFloat(calc.unrealizedPnl || '0'),
+          realizedPnl: parseFloat(calc.realizedPnl || '0'),
+          roi: parseFloat(calc.returnOnEquity || '0') * 100,
+          status: 'OPEN',
+          openedAt: calc.createdAt || new Date().toISOString(),
+          updatedAt: calc.updatedAt || new Date().toISOString(),
+        };
+        wsServer.broadcast('position.updated', formatted);
       }
     } else if (type === 'position.closed' || type === 'position.liquidated') {
       if (data.positionId) {
         this.cachedPositions.delete(data.positionId);
         this.recomputeMetrics();
-        wsServer.broadcast('position.closed', data);
+        wsServer.broadcast('position.closed', { id: data.positionId, positionId: data.positionId });
       }
     } else if (type === 'order.created' || type === 'order.updated' || type === 'order.filled' || type === 'order.cancelled') {
       wsServer.broadcast(type, data);
@@ -381,6 +400,7 @@ export class ProprService {
       this.cachedAccount.totalUnrealizedPnl = totalUpnl;
       this.cachedAccount.marginBalance = equity;
     }
+    return updatedPositions;
   }
 
   public getCachedRecentTrades(asset: string): any[] {
