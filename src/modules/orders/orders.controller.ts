@@ -17,7 +17,7 @@ export class OrdersController {
   public async getOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const orders = ordersService.getUserOrders(userId);
+      const orders = await ordersService.getUserOrders(userId);
       res.status(200).json({ success: true, data: orders });
     } catch (err) {
       next(err);
@@ -42,7 +42,7 @@ export class OrdersController {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
-      const order = ordersService.cancelOrder(userId, id);
+      const order = await ordersService.cancelOrder(userId, id);
       res.status(200).json({ success: true, data: order });
     } catch (err) {
       next(err);

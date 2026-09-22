@@ -15,7 +15,7 @@ export class PositionsController {
   public async getPositions(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const positions = positionsService.getUserPositions(userId);
+      const positions = await positionsService.getUserPositions(userId);
       res.status(200).json({ success: true, data: positions });
     } catch (err) {
       next(err);
@@ -26,7 +26,7 @@ export class PositionsController {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
-      const result = positionsService.closePosition(userId, id);
+      const result = await positionsService.closePosition(userId, id);
       res.status(200).json({ success: true, data: result });
     } catch (err) {
       next(err);
@@ -38,7 +38,7 @@ export class PositionsController {
       const { id } = req.params;
       const userId = req.user!.id;
       const validated = partialCloseSchema.parse(req.body);
-      const result = positionsService.partialClosePosition(userId, id, validated.quantity);
+      const result = await positionsService.partialClosePosition(userId, id, validated.quantity);
       res.status(200).json({ success: true, data: result });
     } catch (err) {
       next(err);

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { marketsService } from './markets.service';
+import { proprService } from '../../exchange/propr.service';
 
 export class MarketsController {
   public getAll(req: Request, res: Response, next: NextFunction): void {
@@ -28,7 +29,7 @@ export class MarketsController {
   public async getCandles(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { symbol } = req.params;
-      const timeframe = (req.query.timeframe as string) || '1m';
+      const timeframe = (req.query.timeframe as string) || '15m';
       const limit = parseInt((req.query.limit as string) || '100', 10);
       const candles = await marketsService.getCandles(symbol, timeframe, limit);
       res.status(200).json({ success: true, data: candles });
@@ -43,6 +44,27 @@ export class MarketsController {
       const depth = parseInt((req.query.depth as string) || '10', 10);
       const orderbook = await marketsService.getOrderbook(symbol, depth);
       res.status(200).json({ success: true, data: orderbook });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public async getMarginConfig(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { symbol } = req.params;
+      const config = await proprService.getMarginConfig(symbol);
+      res.status(200).json({ success: true, data: config });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  public async getTrades(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { symbol } = req.params;
+      const limit = parseInt((req.query.limit as string) || '50', 10);
+      const trades = await proprService.getTrades(symbol, limit);
+      res.status(200).json({ success: true, data: trades });
     } catch (err) {
       next(err);
     }

@@ -1,17 +1,90 @@
 import { v4 as uuidv4 } from 'uuid';
 import { store } from '../../store/memoryStore';
 import { exchangeService } from '../../exchange/exchange.service';
+import { proprService } from '../../exchange/propr.service';
 import { portfolioService } from '../portfolio/portfolio.service';
 import { wsServer } from '../websocket/ws.server';
 import { Position, Trade } from '../../types';
 
 export class PositionsService {
-  public getUserPositions(userId: string): Position[] {
+  public async getUserPositions(userId: string): Promise<Position[]> {
+    try {
+      const proprPositions = await proprService.getPositions();
+      if (Array.isArray(proprPositions) && proprPositions.length > 0) {
+        return proprPositions.map((p: any) => ({
+          id: p.positionId,
+          userId,
+          symbol: `${p.asset || p.base}USDT`,
+          side: (p.positionSide || 'long').toUpperCase() as 'LONG' | 'SHORT',
+          entryPrice: parseFloat(p.entryPrice),
+          markPrice: parseFloat(p.markPrice || p.entryPrice),
+          quantity: Math.abs(parseFloat(p.quantity)),
+          leverage: parseInt(p.leverage || '10', 10),
+          margin: parseFloat(p.marginUsed || '0'),
+          liquidationPrice: parseFloat(p.liquidationPrice || '0'),
+          unrealizedPnl: parseFloat(p.unrealizedPnl || '0'),
+          realizedPnl: parseFloat(p.realizedPnl || '0'),
+          roi: parseFloat(p.returnOnEquity || '0') * 100,
+          status: 'OPEN',
+          openedAt: p.createdAt || new Date().toISOString(),
+          updatedAt: p.updatedAt || new Date().toISOString(),
+        }));
+      }
+    } catch (e: any) {
+      console.warn('[PositionsService] Propr getPositions error:', e.message);
+    }
     portfolioService.recalculatePortfolio(userId);
     return store.getUserOpenPositions(userId);
   }
 
-  public closePosition(userId: string, positionId: string): Position {
+  public async closePosition(userId: string, positionId: string): Promise<Position> {
+    // If it is a Propr position or not found in local store
+    if (positionId.startsWith('urn:prp-position') || !store.getPosition(positionId)) {
+      try {
+        const positions = await proprService.getPositions();
+        const match = positions.find((p: any) => p.positionId === positionId);
+        if (match) {
+          const side = match.positionSide.toLowerCase() === 'long' ? 'sell' : 'buy';
+          await proprService.createOrder({
+            asset: match.asset,
+            type: 'market',
+            side: side as 'buy' | 'sell',
+            positionSide: match.positionSide.toLowerCase() as 'long' | 'short',
+            quantity: Math.abs(parseFloat(match.quantity)),
+            reduceOnly: true,
+            closePosition: true,
+          });
+
+          const closedPos: Position = {
+            id: match.positionId,
+            userId,
+            symbol: `${match.asset}USDT`,
+            side: match.positionSide.toUpperCase() as any,
+            entryPrice: parseFloat(match.entryPrice),
+            markPrice: parseFloat(match.markPrice),
+            quantity: 0,
+            leverage: parseInt(match.leverage || '10', 10),
+            margin: 0,
+            liquidationPrice: 0,
+            unrealizedPnl: 0,
+            realizedPnl: parseFloat(match.realizedPnl || '0'),
+            roi: 0,
+            status: 'CLOSED',
+            openedAt: match.createdAt,
+            updatedAt: new Date().toISOString(),
+            closedAt: new Date().toISOString(),
+          };
+          wsServer.broadcastToUser(userId, 'position.closed', closedPos);
+          return closedPos;
+        }
+      } catch (err: any) {
+        console.error('[PositionsService] Propr position close error:', err.message);
+        const error: any = new Error(`Propr close error: ${err.message}`);
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
     const position = store.getPosition(positionId);
     if (!position || position.userId !== userId) {
       const error: any = new Error('Position not found');
@@ -47,7 +120,7 @@ export class PositionsService {
     return portfolioService.closePositionInternal(position, exitPrice, userId, 'Market Close');
   }
 
-  public partialClosePosition(userId: string, positionId: string, quantityToClose: number): { position: Position; closedTrade: Trade } {
+  public async partialClosePosition(userId: string, positionId: string, quantityToClose: number): Promise<{ position: Position; closedTrade: Trade }> {
     const position = store.getPosition(positionId);
     if (!position || position.userId !== userId) {
       const error: any = new Error('Position not found');
@@ -72,7 +145,7 @@ export class PositionsService {
 
     // If closing all, call standard close
     if (quantityToClose === position.quantity) {
-      const closedPos = this.closePosition(userId, positionId);
+      const closedPos = await this.closePosition(userId, positionId);
       const trades = store.getUserTrades(userId);
       return { position: closedPos, closedTrade: trades[0] };
     }

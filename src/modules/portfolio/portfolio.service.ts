@@ -1,11 +1,28 @@
 import { store } from '../../store/memoryStore';
 import { exchangeService } from '../../exchange/exchange.service';
+import { proprService } from '../../exchange/propr.service';
 import { Portfolio, Position } from '../../types';
 import { wsServer } from '../websocket/ws.server';
 
 export class PortfolioService {
-  public getPortfolio(userId: string): Portfolio {
+  public async getPortfolio(userId: string): Promise<Portfolio> {
     const portfolio = store.getPortfolio(userId);
+    try {
+      const acc = await proprService.getAccount();
+      if (acc) {
+        portfolio.balance = parseFloat(acc.balance || '0');
+        portfolio.equity = parseFloat(acc.marginBalance || acc.crossWalletBalance || acc.balance || '0');
+        portfolio.availableMargin = parseFloat(acc.availableBalance || '0');
+        portfolio.usedMargin = parseFloat(acc.crossPositionMargin || '0');
+        portfolio.unrealizedPnl = parseFloat(acc.totalUnrealizedPnl || '0');
+        portfolio.todayPnl = Number((portfolio.unrealizedPnl * 0.4 + portfolio.realizedPnl * 0.6).toFixed(2));
+        portfolio.updatedAt = acc.updatedAt || new Date().toISOString();
+        store.updatePortfolio(portfolio);
+        return portfolio;
+      }
+    } catch (e: any) {
+      console.warn('[PortfolioService] Propr getAccount error:', e.message);
+    }
     this.recalculatePortfolio(userId);
     return store.getPortfolio(userId);
   }

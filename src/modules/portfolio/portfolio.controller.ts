@@ -5,7 +5,7 @@ export class PortfolioController {
   public async getPortfolio(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const portfolio = portfolioService.getPortfolio(userId);
+      const portfolio = await portfolioService.getPortfolio(userId);
       res.status(200).json({ success: true, data: portfolio });
     } catch (err) {
       next(err);

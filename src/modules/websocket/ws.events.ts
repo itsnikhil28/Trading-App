@@ -7,7 +7,8 @@ export type WebSocketEvent =
   | 'position.opened'
   | 'position.updated'
   | 'position.closed'
-  | 'portfolio.updated';
+  | 'portfolio.updated'
+  | 'trade.created';
 
 export interface WebSocketMessage<T = unknown> {
   event: WebSocketEvent | 'subscribed' | 'unsubscribed' | 'error' | 'pong';
