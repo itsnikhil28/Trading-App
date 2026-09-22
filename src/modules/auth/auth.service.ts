@@ -27,7 +27,7 @@ export class AuthService {
 
   public async register(email: string, password: string, name?: string): Promise<AuthTokens> {
     const normalizedEmail = email.toLowerCase().trim();
-    const existing = store.getUserByEmail(normalizedEmail);
+    const existing = await store.getUserByEmail(normalizedEmail);
     if (existing) {
       const error: any = new Error('User with this email already exists');
       error.statusCode = 409;
@@ -69,7 +69,7 @@ export class AuthService {
 
   public async login(email: string, password: string): Promise<AuthTokens> {
     const normalizedEmail = email.toLowerCase().trim();
-    const user = store.getUserByEmail(normalizedEmail);
+    const user = await store.getUserByEmail(normalizedEmail);
     if (!user || !user.passwordHash) {
       const error: any = new Error('Invalid email or password');
       error.statusCode = 401;
@@ -122,26 +122,22 @@ export class AuthService {
         googleId = payload.sub;
         avatarUrl = payload.picture;
       } else {
-        // Mock fallback for test / development mode if client id is not configured yet
-        try {
-          const decoded = jwt.decode(idToken) as any;
-          email = (decoded?.email || 'google.user@example.com').toLowerCase().trim();
-          name = decoded?.name || 'Google Trader';
-          googleId = decoded?.sub || 'google-sub-' + Date.now();
-          avatarUrl = decoded?.picture;
-        } catch {
-          email = 'google.user@example.com';
-          name = 'Google Trader';
-          googleId = 'google-sub-demo';
+        const decoded: any = jwt.decode(idToken);
+        if (!decoded || !decoded.email) {
+          throw new Error('Could not decode token');
         }
+        email = decoded.email.toLowerCase().trim();
+        name = decoded.name;
+        googleId = decoded.sub || uuidv4();
+        avatarUrl = decoded.picture;
       }
-    } catch (err: any) {
-      const error: any = new Error('Google authentication verification failed: ' + (err.message || ''));
+    } catch {
+      const error: any = new Error('Failed to verify Google credentials');
       error.statusCode = 401;
       throw error;
     }
 
-    let user = store.getUserByGoogleId(googleId) || store.getUserByEmail(email);
+    let user = (await store.getUserByGoogleId(googleId)) || (await store.getUserByEmail(email));
 
     if (!user) {
       const now = new Date().toISOString();
@@ -179,7 +175,7 @@ export class AuthService {
   }
 
   public async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
-    const session = store.getSession(refreshToken);
+    const session = await store.getSession(refreshToken);
     if (!session) {
       const error: any = new Error('Invalid refresh token');
       error.statusCode = 401;
@@ -188,7 +184,7 @@ export class AuthService {
 
     try {
       const payload = jwt.verify(refreshToken, config.jwt.refreshSecret) as { id: string };
-      const user = store.getUserById(payload.id);
+      const user = await store.getUserById(payload.id);
       if (!user) {
         throw new Error('User not found');
       }
@@ -216,8 +212,8 @@ export class AuthService {
     return store.deleteSession(refreshToken);
   }
 
-  public getMe(userId: string): Omit<User, 'passwordHash'> {
-    const user = store.getUserById(userId);
+  public async getMe(userId: string): Promise<Omit<User, 'passwordHash'>> {
+    const user = await store.getUserById(userId);
     if (!user) {
       const error: any = new Error('User not found');
       error.statusCode = 404;

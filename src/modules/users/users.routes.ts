@@ -11,7 +11,7 @@ const updateProfileSchema = z.object({
 export class UsersController {
   public async getProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const user = store.getUserById(req.user!.id);
+      const user = await store.getUserById(req.user!.id);
       if (!user) {
         res.status(404).json({ success: false, error: 'User not found' });
         return;
@@ -26,7 +26,7 @@ export class UsersController {
   public async updateProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const validated = updateProfileSchema.parse(req.body);
-      const user = store.getUserById(req.user!.id);
+      const user = await store.getUserById(req.user!.id);
       if (!user) {
         res.status(404).json({ success: false, error: 'User not found' });
         return;

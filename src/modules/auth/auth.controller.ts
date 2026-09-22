@@ -77,7 +77,7 @@ export class AuthController {
   public async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const user = authService.getMe(userId);
+      const user = await authService.getMe(userId);
       res.status(200).json({ success: true, data: user });
     } catch (err) {
       next(err);

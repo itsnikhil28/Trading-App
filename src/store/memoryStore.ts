@@ -50,25 +50,100 @@ class MemoryStore {
     this.portfolios.set(demoId, demoPortfolio);
   }
 
-  // User methods
-  public getUserById(id: string): User | undefined {
-    return this.users.get(id);
+  public async initFromDb(): Promise<void> {
+    if (!this.isDbConnected()) return;
+    try {
+      console.log('[Store] Loading data from MongoDB...');
+      const [users, portfolios, sessions, orders, positions, trades] = await Promise.all([
+        UserModel.find({}).lean(),
+        PortfolioModel.find({}).lean(),
+        SessionModel.find({}).lean(),
+        OrderModel.find({}).lean(),
+        PositionModel.find({}).lean(),
+        TradeModel.find({}).lean(),
+      ]);
+
+      for (const u of users) {
+        this.users.set((u as any).id, u as any);
+      }
+      for (const p of portfolios) {
+        this.portfolios.set((p as any).userId, p as any);
+      }
+      for (const s of sessions) {
+        this.sessions.set((s as any).refreshToken, s as any);
+      }
+      for (const o of orders) {
+        this.orders.set((o as any).id, o as any);
+      }
+      for (const pos of positions) {
+        this.positions.set((pos as any).id, pos as any);
+      }
+      for (const t of trades) {
+        this.trades.set((t as any).id, t as any);
+      }
+      console.log(`[Store] Synced from MongoDB: ${users.length} users, ${portfolios.length} portfolios, ${sessions.length} sessions.`);
+    } catch (err: any) {
+      console.error('[Store] Failed to load data from MongoDB:', err?.message || err);
+    }
   }
 
-  public getUserByEmail(email: string): User | undefined {
+  // User methods
+  public async getUserById(id: string): Promise<User | undefined> {
+    const cached = this.users.get(id);
+    if (cached) return cached;
+    if (this.isDbConnected()) {
+      try {
+        const doc = await UserModel.findOne({ id }).lean();
+        if (doc) {
+          const user = doc as unknown as User;
+          this.users.set(user.id, user);
+          return user;
+        }
+      } catch (err) {
+        console.error('[Store] Error querying user by id from DB:', err);
+      }
+    }
+    return undefined;
+  }
+
+  public async getUserByEmail(email: string): Promise<User | undefined> {
     const normalized = email.toLowerCase().trim();
     for (const user of this.users.values()) {
       if (user.email.toLowerCase().trim() === normalized) {
         return user;
       }
     }
+    if (this.isDbConnected()) {
+      try {
+        const doc = await UserModel.findOne({ email: normalized }).lean();
+        if (doc) {
+          const user = doc as unknown as User;
+          this.users.set(user.id, user);
+          return user;
+        }
+      } catch (err) {
+        console.error('[Store] Error querying user by email from DB:', err);
+      }
+    }
     return undefined;
   }
 
-  public getUserByGoogleId(googleId: string): User | undefined {
+  public async getUserByGoogleId(googleId: string): Promise<User | undefined> {
     for (const user of this.users.values()) {
       if (user.googleId === googleId) {
         return user;
+      }
+    }
+    if (this.isDbConnected()) {
+      try {
+        const doc = await UserModel.findOne({ googleId }).lean();
+        if (doc) {
+          const user = doc as unknown as User;
+          this.users.set(user.id, user);
+          return user;
+        }
+      } catch (err) {
+        console.error('[Store] Error querying user by googleId from DB:', err);
       }
     }
     return undefined;
@@ -118,8 +193,22 @@ class MemoryStore {
     }
   }
 
-  public getSession(refreshToken: string): Session | undefined {
-    return this.sessions.get(refreshToken);
+  public async getSession(refreshToken: string): Promise<Session | undefined> {
+    const cached = this.sessions.get(refreshToken);
+    if (cached) return cached;
+    if (this.isDbConnected()) {
+      try {
+        const doc = await SessionModel.findOne({ refreshToken }).lean();
+        if (doc) {
+          const session = doc as unknown as Session;
+          this.sessions.set(refreshToken, session);
+          return session;
+        }
+      } catch (err) {
+        console.error('[Store] Error querying session from DB:', err);
+      }
+    }
+    return undefined;
   }
 
   public deleteSession(refreshToken: string): boolean {
