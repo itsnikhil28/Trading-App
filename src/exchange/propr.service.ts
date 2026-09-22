@@ -297,7 +297,19 @@ export class ProprService {
     } else if (type === 'account.updated') {
       this.cachedAccount = { ...(this.cachedAccount ?? {}), ...data };
       this.recomputeMetrics();
-      wsServer.broadcast('portfolio.updated', this.cachedAccount);
+      const portfolioPayload = {
+        id: this.accountId,
+        userId: this.cachedAccount.userId || 'user-demo-001',
+        balance: parseFloat(this.cachedAccount.balance || '0'),
+        equity: parseFloat(this.cachedAccount.marginBalance || this.cachedAccount.crossWalletBalance || this.cachedAccount.balance || '0'),
+        availableMargin: parseFloat(this.cachedAccount.availableBalance || '0'),
+        usedMargin: parseFloat(this.cachedAccount.crossPositionMargin || '0'),
+        unrealizedPnl: parseFloat(this.cachedAccount.totalUnrealizedPnl || '0'),
+        realizedPnl: 0,
+        todayPnl: Number((parseFloat(this.cachedAccount.totalUnrealizedPnl || '0') * 0.4).toFixed(2)),
+        updatedAt: this.cachedAccount.updatedAt || new Date().toISOString(),
+      };
+      wsServer.broadcast('portfolio.updated', portfolioPayload);
     } else if (type === 'position.opened' || type === 'position.updated') {
       if (data.positionId) {
         if (Number(data.quantity) > 0 && data.status !== 'closed') {
